@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Claude Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1.5rem;
+  }
+  h1 { font-size: 1.1rem; opacity: 0.7; font-weight: 600; }
+  #log {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    min-height: 50vh;
+  }
+  .msg { padding: 0.6rem 0.9rem; border-radius: 0.6rem; max-width: 85%; white-space: pre-wrap; line-height: 1.4; }
+  .user { align-self: flex-end; background: #2563eb; color: white; }
+  .assistant { align-self: flex-start; background: rgba(127,127,127,0.15); }
+  form { display: flex; gap: 0.5rem; position: sticky; bottom: 1rem; }
+  textarea {
+    flex: 1;
+    resize: none;
+    padding: 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(127,127,127,0.4);
+    font: inherit;
+  }
+  button {
+    padding: 0 1.1rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: #2563eb;
+    color: white;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+  <h1>Claude Chat API — test console</h1>
+  <div id="log"></div>
+  <form id="form">
+    <textarea id="input" rows="2" placeholder="Message Claude..." required></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+
+<script>
+const log = document.getElementById("log");
+const form = document.getElementById("form");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+
+const history = [];
+
+function addMessage(role, text) {
+  const el = document.createElement("div");
+  el.className = `msg ${role}`;
+  el.textContent = text;
+  log.appendChild(el);
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
+  return el;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = "";
+  sendBtn.disabled = true;
+
+  history.push({ role: "user", content: text });
+  addMessage("user", text);
+
+  const assistantEl = addMessage("assistant", "");
+  let assistantText = "";
+
+  try {
+    const res = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: history }),
+    });
+
+    if (!res.ok || !res.body) {
+      throw new Error(`Request failed: ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const events = buffer.split("\n\n");
+      buffer = events.pop(); // keep the last (possibly incomplete) chunk
+
+      for (const chunk of events) {
+        const lines = chunk.split("\n");
+        const eventLine = lines.find((l) => l.startsWith("event:"));
+        const dataLine = lines.find((l) => l.startsWith("data:"));
+        if (!dataLine) continue;
+
+        const eventType = eventLine ? eventLine.slice(6).trim() : "message";
+        const data = JSON.parse(dataLine.slice(5).trim());
+
+        if (eventType === "error") {
+          assistantText += `\n[error] ${data.error}`;
+          assistantEl.textContent = assistantText;
+        } else if (eventType !== "done") {
+          assistantText += data.text;
+          assistantEl.textContent = assistantText;
+        }
+      }
+    }
+
+    history.push({ role: "assistant", content: assistantText });
+  } catch (err) {
+    assistantEl.textContent = `[error] ${err.message}`;
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+});
+</script>
+</body>
+</html>
