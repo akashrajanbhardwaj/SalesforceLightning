@@ -5,14 +5,77 @@
 <title>Claude Chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  :root { color-scheme: light dark; }
+  /* ---- Theme tokens ---------------------------------------------------- */
+  /* Light theme is built around the app's existing accent blue (#2563eb). */
+  :root,
+  :root[data-theme="light"] {
+    --bg: #ffffff;
+    --text: #111827;
+    --text-muted: #6b7280;
+    --accent: #2563eb;
+    --accent-text: #ffffff;
+    --assistant-bg: #f1f3f5;
+    --assistant-text: #111827;
+    --border: #d1d5db;
+    --input-bg: #ffffff;
+    --header-border: #e5e7eb;
+    --switch-track: #cbd5e1;
+  }
+
+  /* Dark theme: deep slate that complements the blue accent, light text. */
+  :root[data-theme="dark"] {
+    --bg: #0f172a;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent-text: #ffffff;
+    --assistant-bg: #1e293b;
+    --assistant-text: #e2e8f0;
+    --border: #334155;
+    --input-bg: #1e293b;
+    --header-border: #1e293b;
+    --switch-track: #475569;
+  }
+
+  /* Fall back to the OS preference until the user picks a theme. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      --bg: #0f172a;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-text: #ffffff;
+      --assistant-bg: #1e293b;
+      --assistant-text: #e2e8f0;
+      --border: #334155;
+      --input-bg: #1e293b;
+      --header-border: #1e293b;
+      --switch-track: #475569;
+    }
+  }
+
+  /* ---- Layout ---------------------------------------------------------- */
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     max-width: 720px;
     margin: 0 auto;
     padding: 1.5rem;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.2s ease, color 0.2s ease;
   }
-  h1 { font-size: 1.1rem; opacity: 0.7; font-weight: 600; }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--header-border);
+  }
+  h1 { font-size: 1.1rem; opacity: 0.75; font-weight: 600; margin: 0; }
+
   #log {
     display: flex;
     flex-direction: column;
@@ -21,31 +84,84 @@
     min-height: 50vh;
   }
   .msg { padding: 0.6rem 0.9rem; border-radius: 0.6rem; max-width: 85%; white-space: pre-wrap; line-height: 1.4; }
-  .user { align-self: flex-end; background: #2563eb; color: white; }
-  .assistant { align-self: flex-start; background: rgba(127,127,127,0.15); }
+  .user { align-self: flex-end; background: var(--accent); color: var(--accent-text); }
+  .assistant { align-self: flex-start; background: var(--assistant-bg); color: var(--assistant-text); }
+
   form { display: flex; gap: 0.5rem; position: sticky; bottom: 1rem; }
   textarea {
     flex: 1;
     resize: none;
     padding: 0.6rem;
     border-radius: 0.5rem;
-    border: 1px solid rgba(127,127,127,0.4);
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--text);
     font: inherit;
   }
   button {
     padding: 0 1.1rem;
     border: none;
     border-radius: 0.5rem;
-    background: #2563eb;
-    color: white;
+    background: var(--accent);
+    color: var(--accent-text);
     font: inherit;
     cursor: pointer;
   }
   button:disabled { opacity: 0.5; cursor: default; }
+
+  /* ---- Theme toggle switch --------------------------------------------- */
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+  .theme-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .switch {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    border-radius: 999px;
+    background: var(--switch-track);
+    transition: background 0.2s ease;
+    flex: none;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease;
+  }
+  /* When the checkbox is checked, we are in dark mode. */
+  .theme-toggle input:checked + .switch { background: var(--accent); }
+  .theme-toggle input:checked + .switch::after { transform: translateX(20px); }
+  .theme-toggle input:focus-visible + .switch {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .theme-toggle .label-icon { font-size: 1rem; line-height: 1; }
 </style>
 </head>
 <body>
-  <h1>Claude Chat API — test console</h1>
+  <header>
+    <h1>Claude Chat API — test console</h1>
+    <label class="theme-toggle" title="Toggle light / dark mode">
+      <span class="label-icon" aria-hidden="true">☀️</span>
+      <input type="checkbox" id="theme-switch" role="switch" aria-label="Toggle dark mode" />
+      <span class="switch" aria-hidden="true"></span>
+      <span class="label-icon" aria-hidden="true">🌙</span>
+    </label>
+  </header>
+
   <div id="log"></div>
   <form id="form">
     <textarea id="input" rows="2" placeholder="Message Claude..." required></textarea>
@@ -53,6 +169,31 @@
   </form>
 
 <script>
+// ---- Theme handling -----------------------------------------------------
+const root = document.documentElement;
+const themeSwitch = document.getElementById("theme-switch");
+const STORAGE_KEY = "theme";
+
+function systemPrefersDark() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function applyTheme(theme) {
+  root.setAttribute("data-theme", theme);
+  themeSwitch.checked = theme === "dark";
+}
+
+// On load: use the saved choice, else fall back to the OS preference.
+const saved = localStorage.getItem(STORAGE_KEY);
+applyTheme(saved || (systemPrefersDark() ? "dark" : "light"));
+
+themeSwitch.addEventListener("change", () => {
+  const theme = themeSwitch.checked ? "dark" : "light";
+  localStorage.setItem(STORAGE_KEY, theme);
+  applyTheme(theme);
+});
+
+// ---- Chat ---------------------------------------------------------------
 const log = document.getElementById("log");
 const form = document.getElementById("form");
 const input = document.getElementById("input");
